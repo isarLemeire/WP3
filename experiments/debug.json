@@ -1,0 +1,91 @@
+{
+    "data" : {
+        "batch_size" : 4,
+        "subset_size" : 4,
+        "csv_filepath" : "NIPS2017/images.csv",
+        "img_dir_filepath" : "NIPS2017/images/"
+
+    },
+
+    "surrogates":
+    [
+        {
+            "name": "ViT-T",
+            "timm_string": "vit_tiny_patch16_224",
+            "path": "models/ViT-T.pth"
+        },
+        {
+            "name": "DeiT-T",
+            "timm_string": "deit_tiny_patch16_224",
+            "path": "models/DeiT-T.pth"
+        },
+        {
+            "name": "PiT-T",
+            "timm_string": "pit_ti_224",
+            "path": "models/PiT-T.pth"
+        }
+    ],
+
+    "targets":
+    [
+        {
+            "name": "ResNetV2-101",
+            "timm_string": "resnetv2_101",
+            "path": "models/ResNetV2-101.pth"
+        },
+        {
+            "name": "DenseNet-201",
+            "timm_string": "densenet201",
+            "path": "models/DenseNet-201.pth"
+        },
+        {
+            "name": "InceptionV4",
+            "timm_string": "inception_v4",
+            "path": "models/InceptionV4.pth"
+        },
+        {
+            "name": "MobileNetV3",
+            "timm_string": "mobilenetv3_large_100",
+            "path": "models/MobileNetV3.pth"
+        },
+        {
+            "name": "BiT-r101",
+            "timm_string": "resnetv2_101x1_bit.goog_in21k_ft_in1k",
+            "path": "models/BiT-r101.pth"
+        },
+        {
+            "name": "ViT-B",
+            "timm_string": "vit_base_patch16_224",
+            "path": "models/ViT-B.pth"
+        },
+        {
+            "name": "DeiT-B",
+            "timm_string": "deit_base_patch16_224",
+            "path": "models/DeiT-B.pth"
+        },
+        {
+            "name": "Swin-B",
+            "timm_string": "swin_base_patch4_window7_224",
+            "path": "models/Swin-B.pth"
+        },
+        {
+            "name": "PiT-B",
+            "timm_string": "pit_b_224",
+            "path": "models/PiT-B.pth"
+        },
+        {
+            "name": "EnsAdvIncResV2",
+            "timm_string": "ens_adv_inception_resnet_v2",
+            "path": "models/EnsAdvIncResV2.pth"
+        },
+        {
+            "name": "EnsIncV3",
+            "timm_string": "adv_inception_v3",
+            "path": "models/EnsIncV3.pth"
+        }
+    ],
+
+    "output" : "outp.csv",
+
+    "attacks" : ["FDA", "ILA", "FIA", "NAA", "DFAA", "GFLA"]
+}

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torchattacks.attack import Attack
 
 class MIG(Attack):
-    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=0.9, num_samples=20):
+    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=0.9, num_samples=5):
         super().__init__("MIG", model)
         self.eps = eps
         self.alpha = alpha

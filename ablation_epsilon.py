@@ -1,9 +1,9 @@
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+from torchvision import models
 from torch.utils.data import DataLoader
 
-from torchattacks import BIM, MIFGSM, NIFGSM, DIFGSM, TIFGSM, SINIFGSM, VMIFGSM
 
 import pandas as pd
 
@@ -14,30 +14,10 @@ from types import SimpleNamespace
 from src.data.nips_2017_dataset import NIPS2017Dataset
 
 from src.models.model_wrapper import ModelWrapper
+
 from src.adversarial.adversarial_generator import AdversarialGenerator
 
-from src.adversarial.FDA import FDA
-from src.adversarial.ILA import ILA
-from src.adversarial.FIA import FIA
-from src.adversarial.NAA import NAA
-from src.adversarial.DFAA import DFAA
 from src.adversarial.GFLA import GFLA
-from src.adversarial.GFLA_D import GFLA_D
-from src.adversarial.ILPD import ILPD
-from src.adversarial.BSR import BSR
-from src.adversarial.ANDA import ANDA
-from src.adversarial.LPAA import LPAA
-from src.adversarial.MIG import MIG
-from src.adversarial.ResPA import ResPA
-from src.adversarial.TGR import TGR
-from src.adversarial.GRA import GRA
-from src.adversarial.PGN import PGN
-from src.adversarial.TAP import TAP
-
-from src.adversarial.GFLA_TI import GFLA_TI
-from src.adversarial.GFLA_BSR import GFLA_BSR
-from src.adversarial.GFLA_SI import GFLA_SI
-from src.adversarial.GFLA_TI import GFLA_TI
 
 def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -76,79 +56,48 @@ def get_models(models, device):
             timm_string = model.get("timm_string"), 
             path=model.get("path"), 
             input_size=model.get("input_size", 224), 
-            ViT=model.get("ViT", False),
             device=device) 
         for model in models]
     
-import time
-import pandas as pd
-import torch
-
-
-def perform_experiment(
-    attacks,
-    surrogate_models,
-    target_models,
-    loader,
-    filename,
-    epsilon,
-    device="cuda",
-):
+def perform_experiment(surrogate_models, target_models, loader, epsilons, filename, targeted=False, device="cuda"):
     all_rows = []
-
+    
     for s_model in surrogate_models:
         s_name = s_model.__class__.__name__
-
-        for attack_class in attacks:
-            attack_name = (
-                attack_class.__name__
-                if isinstance(attack_class, type)
-                else attack_class.__class__.__name__
-            )
-
-            if "cuda" in str(device) and torch.cuda.is_available():
-                torch.cuda.synchronize()
-            start_time = time.perf_counter()
+        
+        for eps in epsilons:
 
             adv_loader = AdversarialGenerator.generate_perturbed_dataset(
-                loader,
-                s_model,
-                attack_class,
-                device=device,  # type: ignore
-                targeted=False,
-                eps=epsilon,
+                loader, 
+                s_model, 
+                GFLA,
+                eps = eps,
+                device=device, # type: ignore
+                targeted=targeted
             )
-
-            if "cuda" in str(device) and torch.cuda.is_available():
-                torch.cuda.synchronize()
-            wall_time = time.perf_counter() - start_time
-
+            
             eval_models = target_models + [s_model]
             for t_model in eval_models:
+                results = t_model.evaluate_attack_metrics(s_model, loader, adv_loader)
 
-                results = t_model.evaluate_attack_metrics(
-                    s_model, loader, adv_loader
-                )
-
-                t_name = getattr(t_model, "name", t_model.__class__.__name__)
-
-                all_rows.append(
-                    {
-                        "Surrogate": s_name,
-                        "Attack": attack_name,
-                        "Target": t_name,
-                        "Fooling Rate": results["fooling_rate"] * 100,
-                        "Transfer Rate": results["transfer_rate"] * 100,
-                        "Wall Time (s)": wall_time,
-                    }
-                )
+                t_name = getattr(t_model, 'name', t_model.__class__.__name__)
+                
+                # Append a dictionary representing one row of the table
+                all_rows.append({
+                    "Surrogate": s_name,
+                    "Attack": "GFLA",
+                    "Target": t_name,
+                    "Fooling Rate": results["fooling_rate"] * 100,
+                    "Transfer Rate": results["transfer_rate"] * 100,
+                    "epsilon": eps
+                })
 
     df = pd.DataFrame(all_rows)
-    if filename.endswith(".csv"):
+    if filename.endswith('.csv'):
         df.to_csv(filename, index=False)
-    elif filename.endswith(".xlsx"):
+    elif filename.endswith('.xlsx'):
         df.to_excel(filename, index=False)
-
+        
     return df
 
 def main(config):
@@ -166,16 +115,13 @@ def main(config):
     surrogates = get_models(config.surrogates, device)
     targets = get_models(config.targets, device)
     
-    attacks = [globals()[name] for name in config.attacks]
     
     perform_experiment(
-        attacks=attacks,
         surrogate_models=surrogates,
         target_models=targets, 
         loader=loader,
-        filename=config.output,
-        epsilon=config.eps/255,
-        device=device # type: ignore
+        epsilons=config.epsilons,
+        filename=config.output
     )
     
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from torchattacks.attack import Attack
 
 
 class GRA(Attack):
-    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=0.9, beta=3.5, eta_m=0.94, num_samples=20):
+    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=0.9, beta=3.5, eta_m=0.94, num_samples=5):
         super().__init__("GRA", model)
         self.eps = eps
         self.alpha = alpha

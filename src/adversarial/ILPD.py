@@ -60,9 +60,6 @@ class ILPD(FeatureAttack):
                     pd_handle.remove()
                     self.feature_outputs.clear()
 
-        # Summing loss_i slows down the code due to filling up the computational graph,
-        # proxy_loss differs from the official ILPD paper,
-        # but results in the same gradient from the optimizers POV.
         proxy_loss = (adv_images * accumulated_grad.detach()).sum()
 
         return proxy_loss, 1

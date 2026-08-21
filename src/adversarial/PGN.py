@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torchattacks.attack import Attack
 
 class PGN(Attack):
-    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=0.9, beta=3.0, gamma=0.5, num_samples=20):
+    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=0.9, beta=3.0, gamma=0.5, num_samples=5):
         super().__init__("PGN", model)
         self.eps = eps
         self.alpha = alpha

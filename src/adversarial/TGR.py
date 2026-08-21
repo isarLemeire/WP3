@@ -1,129 +1,120 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import numpy as np
 
-from .FeatureAttack import FeatureAttack
+from functools import partial
 
-class TGR(FeatureAttack):
-    def __init__(
-        self,
-        model,
-        momentum=0.9,
-        eps=8 / 255,
-        alpha=2 / 255,
-        steps=10,
-        s=2.0,
-        k=3,
-        vit_layer_substrings=[
-            "mlp.fc2",
-            "norm2",
-            "attn.proj",
-            "attn.qkv",
-            "attn.attn_drop",
-        ],
-        **kwargs,
-    ):
-        super().__init__(
-            model=model,
-            momentum=momentum,
-            eps=eps,
-            alpha=alpha,
-            steps=steps,
-            vit_layer_substrings=vit_layer_substrings,
-            attack_name="TGR",
-            **kwargs,
-        )
-        self.s = s
-        self.k = k
+from torchattacks.attack import Attack
 
-    def _mlp_qkv_grad_hook(self, grad):
-        """Applies gradient scaling and top-k/bottom-k zeroing across channels."""
-        if grad is None:
-            return grad
+class TGR(Attack):
+    def __init__(self, model, eps=16 / 255, steps=10, decay=1.0,
+                 attn_gamma=0.25, qkv_gamma=0.75, mlp_gamma=0.5,
+                 targeted=False):
+        super().__init__("TGR", model)
+        self.eps = eps
+        self.steps = steps
+        self.step_size = eps / steps
+        self.decay = decay
+        self.attn_gamma = attn_gamma
+        self.qkv_gamma = qkv_gamma
+        self.mlp_gamma = mlp_gamma
+        self.targeted = targeted
+        self.loss_flag = -1 if targeted else 1
 
-        g = grad.clone() * self.s
+        self._hook_handles = []
+        self._register_hooks()
 
-        # Handle 3D token representations [B, N, C]
-        if g.dim() == 3:
-            B, N, C = g.shape
-            if N <= 2 * self.k:
-                return g
+    def _attn_tgr(self, module, grad_in, grad_out, gamma):
+        out_grad = grad_in[0].clone() * gamma
+        B, C, H, W = out_grad.shape  # C = num_heads, H = W = num_tokens
+        out_grad_cpu = out_grad.data.clone().cpu().numpy().reshape(B, C, H * W)
 
-            # Top-k and Bottom-k along token dimension N for each channel C
-            _, top_idx = torch.topk(g, self.k, dim=1, largest=True)
-            _, bot_idx = torch.topk(g, self.k, dim=1, largest=False)
+        max_all = np.argmax(out_grad_cpu[0, :, :], axis=1)
+        max_all_H, max_all_W = max_all // H, max_all % H
+        min_all = np.argmin(out_grad_cpu[0, :, :], axis=1)
+        min_all_H, min_all_W = min_all // H, min_all % H
 
-            g.scatter_(1, top_idx, 0.0)
-            g.scatter_(1, bot_idx, 0.0)
+        out_grad[:, range(C), max_all_H, :] = 0.0
+        out_grad[:, range(C), :, max_all_W] = 0.0
+        out_grad[:, range(C), min_all_H, :] = 0.0
+        out_grad[:, range(C), :, min_all_W] = 0.0
+        return (out_grad,)
 
-        # Handle 4D CNN tensor fallback [B, C, H, W]
-        elif g.dim() == 4:
-            B, C, H, W = g.shape
-            N = H * W
-            if N <= 2 * self.k:
-                return g
+    def _qkv_tgr(self, module, grad_in, grad_out, gamma):
+        """Hooked on attn.qkv -- grad_in[0] is the gradient w.r.t. the qkv
+        Linear's INPUT (token embeddings), shape [B, N, C]. NOT the QKV
+        projection's output; nothing here isolates V specifically."""
+        out_grad = grad_in[0].clone() * gamma
+        c = out_grad.shape[2]
+        out_grad_cpu = out_grad.data.clone().cpu().numpy()
 
-            g_flat = g.flatten(2)  # [B, C, N]
-            _, top_idx = torch.topk(g_flat, self.k, dim=2, largest=True)
-            _, bot_idx = torch.topk(g_flat, self.k, dim=2, largest=False)
+        max_all = np.argmax(out_grad_cpu[0, :, :], axis=0)  # per-channel extreme token
+        min_all = np.argmin(out_grad_cpu[0, :, :], axis=0)
+        out_grad[:, max_all, range(c)] = 0.0
+        out_grad[:, min_all, range(c)] = 0.0
+        return (out_grad,) + tuple(grad_in[1:])
 
-            g_flat.scatter_(2, top_idx, 0.0)
-            g_flat.scatter_(2, bot_idx, 0.0)
-            g = g_flat.reshape(B, C, H, W)
+    def _mlp_tgr(self, module, grad_in, grad_out, gamma):
+        """Hooked on mlp -- grad_in[0] is the gradient w.r.t. the mlp
+        block's INPUT, shape [B, N, C]."""
+        out_grad = grad_in[0].clone() * gamma
+        c = out_grad.shape[2]
+        out_grad_cpu = out_grad.data.clone().cpu().numpy()
 
-        return g
+        max_all = np.argmax(out_grad_cpu[0, :, :], axis=0)
+        min_all = np.argmin(out_grad_cpu[0, :, :], axis=0)
+        out_grad[:, max_all, range(c)] = 0.0
+        out_grad[:, min_all, range(c)] = 0.0
+        return (out_grad,) + tuple(grad_in[1:])
 
-    def _attn_grad_hook(self, grad):
-        """Applies gradient scaling and row/column zeroing on attention matrices."""
-        if grad is None:
-            return grad
+    def _register_hooks(self):
+        attn_hook = partial(self._attn_tgr, gamma=self.attn_gamma)
+        qkv_hook = partial(self._qkv_tgr, gamma=self.qkv_gamma)
+        mlp_hook = partial(self._mlp_tgr, gamma=self.mlp_gamma)
 
-        g = grad.clone() * self.s
-
-        # Handle 4D Attention map tensors [B, Head, N, N]
-        if g.dim() == 4:
-            B, Head, N, N_col = g.shape
-            if N != N_col or N <= 2 * self.k:
-                return g
-
-            # Calculate token importance by summing row and column gradient magnitudes
-            token_scores = g.abs().sum(dim=3) + g.abs().sum(dim=2)  # [B, Head, N]
-
-            _, top_tok = torch.topk(token_scores, self.k, dim=-1, largest=True)
-            _, bot_tok = torch.topk(
-                token_scores, self.k, dim=-1, largest=False
+        for block in self.model.blocks:
+            self._hook_handles.append(
+                block.attn.attn_drop.register_full_backward_hook(attn_hook)
+            )
+            self._hook_handles.append(
+                block.attn.qkv.register_full_backward_hook(qkv_hook)
+            )
+            self._hook_handles.append(
+                block.mlp.register_full_backward_hook(mlp_hook)
             )
 
-            mask = torch.ones_like(g)
-            for b in range(B):
-                for h in range(Head):
-                    prune_indices = torch.cat(
-                        [top_tok[b, h], bot_tok[b, h]]
-                    ).unique()
-                    mask[b, h, prune_indices, :] = 0.0
-                    mask[b, h, :, prune_indices] = 0.0
+    def remove_hooks(self):
+        """Not called automatically -- the reference registers hooks once
+        for the lifetime of the attack object too. Call this explicitly if
+        you need to reuse the same underlying model without TGR's gradient
+        surgery active afterward."""
+        for h in self._hook_handles:
+            h.remove()
+        self._hook_handles = []
 
-            g = g * mask
+    # ------------------------------------------------------------------ #
+    def forward(self, images, labels):
+        images = images.clone().detach().to(self.device)
+        labels = labels.clone().detach().to(self.device)
+        loss_fn = nn.CrossEntropyLoss()
 
-        return g
+        momentum = torch.zeros_like(images).detach()
+        adv_images = images.clone().detach()
 
-    def _get_hook(self):
-        def hook(m, i, o):
-            out_tensor = o[0] if isinstance(o, tuple) else o
+        for _ in range(self.steps):
+            adv_images.requires_grad_(True)
+            outputs = self.get_logits(adv_images)
+            cost = self.loss_flag * loss_fn(outputs, labels)
 
-            if out_tensor.requires_grad:
-                # Distinguish attention matrix outputs [B, Head, N, N] from feature projections
-                if out_tensor.dim() == 4 and out_tensor.shape[2] == out_tensor.shape[3]:
-                    out_tensor.register_hook(self._attn_grad_hook)
-                else:
-                    out_tensor.register_hook(self._mlp_qkv_grad_hook)
+            grad = torch.autograd.grad(cost, adv_images, retain_graph=False, create_graph=False)[0]
 
-            self.feature_outputs.append(out_tensor)
+            grad = grad / (torch.mean(torch.abs(grad), dim=(1, 2, 3), keepdim=True) + 1e-8)
+            grad = grad + momentum * self.decay
+            momentum = grad
 
-        return hook
+            adv_images = adv_images.detach() + self.step_size * grad.sign()
+            delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
+            adv_images = torch.clamp(images + delta, min=0.0, max=1.0).detach()
 
-    def compute_loss(self, adv_images, labels, references):
-        logits = self.get_logits(adv_images)
-        loss = F.cross_entropy(logits, labels)
-        # Direction = 1 for Gradient Ascent (maximizing CE Loss)
-        return loss, 1
+        return adv_images

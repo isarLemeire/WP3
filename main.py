@@ -33,11 +33,14 @@ from src.adversarial.TGR import TGR
 from src.adversarial.GRA import GRA
 from src.adversarial.PGN import PGN
 from src.adversarial.TAP import TAP
+<<<<<<< HEAD
 
 from src.adversarial.GFLA_TI import GFLA_TI
 from src.adversarial.GFLA_BSR import GFLA_BSR
 from src.adversarial.GFLA_SI import GFLA_SI
 from src.adversarial.GFLA_TI import GFLA_TI
+=======
+>>>>>>> 4d7e77117af2267bd2e3fe576a5ed9d55bdee7b3
 
 def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):
     IMAGENET_MEAN = [0.485, 0.456, 0.406]

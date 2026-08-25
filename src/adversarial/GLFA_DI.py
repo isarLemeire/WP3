@@ -22,13 +22,13 @@ class GFLA_DI(GFLA):
             img_size, img_resize = img_resize, img_size
 
         rnd = torch.randint(low=img_size, high=img_resize, size=(1,), dtype=torch.int32)
-        rescaled = F.interpolate(x, size=[rnd.item(), rnd.item()], mode="nearest")
+        rescaled = F.interpolate(x, size=[rnd.item(), rnd.item()], mode="nearest") # type: ignore
 
         h_rem = img_resize - rnd
         w_rem = img_resize - rnd
-        pad_top = torch.randint(low=0, high=h_rem.item() + 1, size=(1,))
+        pad_top = torch.randint(low=0, high=h_rem.item() + 1, size=(1,)) # type: ignore
         pad_bottom = h_rem - pad_top
-        pad_left = torch.randint(low=0, high=w_rem.item() + 1, size=(1,))
+        pad_left = torch.randint(low=0, high=w_rem.item() + 1, size=(1,)) # type: ignore
         pad_right = w_rem - pad_left
 
         padded = F.pad(

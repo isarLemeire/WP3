@@ -2,5 +2,5 @@ CIFAR/
 figures/
 jupyter/
 results/
-
+*.csv
 *.pyc

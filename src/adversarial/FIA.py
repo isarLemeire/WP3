@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from .FeatureAttack import FeatureAttack
 
 class FIA(FeatureAttack):
-    def __init__(self, *args, drop_rate=0.3, num_ensemble=30, num_classes = 1000, **kwargs):
+    def __init__(self, *args, drop_rate=0.3, num_ensemble=5, num_classes = 1000, **kwargs):
         super().__init__(attack_name="FIA", *args, **kwargs)
         self.drop_rate = drop_rate
         self.num_ensemble = num_ensemble

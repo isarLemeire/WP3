@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from .FeatureAttack import FeatureAttack
 
 class NAA(FeatureAttack):
-    def __init__(self, *args, num_steps_ig=30, random_noise = 0.2, **kwargs):
+    def __init__(self, *args, num_steps_ig=5, random_noise = 0.2, **kwargs):
         super().__init__(attack_name="NAA", *args, **kwargs)
         self.num_steps_ig = int(num_steps_ig)
         self.random_noise = random_noise

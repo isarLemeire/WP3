@@ -23,6 +23,8 @@ from src.adversarial.NAA import NAA
 from src.adversarial.DFAA import DFAA
 from src.adversarial.GFLA import GFLA
 from src.adversarial.GFLA_D import GFLA_D
+from src.adversarial.ILPD import ILPD
+from src.adversarial.TAP import TAP
 
 
 def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):
@@ -211,7 +213,7 @@ def perform_experiment(attacks, surrogate_models, target_models, loader, filenam
                     device=device) # type: ignore
                 
                 results = model.evaluate_attack_metrics(s_model, loader, adv_loader)
-
+                
                 
                 # Append data
                 all_rows.append({
@@ -220,12 +222,12 @@ def perform_experiment(attacks, surrogate_models, target_models, loader, filenam
                     "Target": m_name,
                     "Fooling Rate": results["fooling_rate"] * 100,
                     "Transfer Rate": results["transfer_rate"] * 100,
-                    
                     "CE Loss": results["loss"], 
-                    "Feature disruption distance": results["feature_distance"],
-                    "Cosine alignment" : results["cosine_alignment"],
-                    "Feature projection": results["projection"],
-                    "Loss over displacement":  results["loss_over_feature_distance"],
+
+                    "Feature disruption distance": displacement,
+                    "Cosine alignment" : alignment,
+                    "Feature projection": projection,
+                    "Loss over displacement":  results["loss"] / displacement,
                 })
 
     df = pd.DataFrame(all_rows)

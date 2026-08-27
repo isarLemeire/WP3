@@ -16,7 +16,7 @@ class GFLA_DI(GFLA):
 
 
     def _input_diversity(self, x):
-        img_size = x.shape[-1]
+        img_size = x.shape[-1]  # Original height/width (e.g., 224)
         img_resize = int(img_size * self.resize_rate)
 
         if self.resize_rate < 1:
@@ -34,11 +34,14 @@ class GFLA_DI(GFLA):
 
         padded = F.pad(
             rescaled,
-            [pad_left.item(), pad_right.item(), pad_top.item(), pad_bottom.item()], # type: ignore
+            [pad_left.item(), pad_right.item(), pad_top.item(), pad_bottom.item()],
             value=0,
         )
 
-        return padded if torch.rand(1) < self.diversity_prob else x
+        # Resize back to original img_size to maintain ViT input shape compatibility
+        out = F.interpolate(padded, size=[img_size, img_size], mode="bilinear", align_corners=False)
+
+        return out if torch.rand(1) < self.diversity_prob else x
 
     def _forward_with_features(self, x):
         self.feature_outputs.clear()

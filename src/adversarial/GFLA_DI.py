@@ -7,6 +7,7 @@ class GFLA_DI(GFLA):
     def __init__(self, model, resize_rate=1.15, diversity_prob=0.5,
                  num_copies=5, num_neighbors=3, beta=4.5, **kwargs):
         super().__init__(model=model, **kwargs)
+        self.attack_name = "GFLA-DI"
         self.resize_rate = resize_rate
         self.diversity_prob = diversity_prob
         self.num_copies = num_copies

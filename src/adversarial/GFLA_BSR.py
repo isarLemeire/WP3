@@ -10,6 +10,7 @@ class GFLA_BSR(GFLA):
     def __init__(self, model, num_block=2, num_copies=5, max_angles=0.2,
                  num_neighbors=3, beta=4.5, **kwargs):
         super().__init__(model=model, **kwargs)
+        self.attack_name = "GFLA-BSR"
         self.num_block = num_block
         self.num_copies = num_copies
         self.max_angles = max_angles

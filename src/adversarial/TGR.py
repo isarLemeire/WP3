@@ -15,7 +15,7 @@ from torchattacks.attack import Attack
 
 
 class TGR(Attack):
-    def __init__(self, model, eps=16 / 255, steps=10, decay=1.0,
+    def __init__(self, model, eps=8 / 255, steps=10, decay=1.0,
                  attn_gamma=0.25, qkv_gamma=0.75, mlp_gamma=0.5,
                  targeted=False):
         super().__init__("TGR", model)

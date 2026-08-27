@@ -67,8 +67,6 @@ class ANDA_collector:
         sampled = self.noise_mean.unsqueeze(0) + scale * self.noise_std.unsqueeze(0) * eps
         return sampled
 
-
-
 class ANDA(Attack):
     def __init__(
         self,
@@ -94,56 +92,83 @@ class ANDA(Attack):
         self.grid_size = int(math.sqrt(self.n_ens))
         self.thetas = get_thetas(self.grid_size, -self.aug_max, self.aug_max)
 
-    def forward(self, images, labels):
-        images = images.clone().detach().to(self.device)
-        labels = labels.clone().detach().to(self.device)
-        B, C, H, W = images.shape
+    class ANDA(Attack):
+        def __init__(
+            self,
+            model,
+            eps=8 / 255,
+            alpha=2 / 255,
+            steps=10,
+            n_ens=4,
+            aug_max=0.3,
+            sample=False,
+        ):
+            super().__init__("ANDA", model)
+            self.eps = eps
+            self.alpha = alpha
+            self.steps = steps
+            self.n_ens = n_ens
+            self.aug_max = aug_max
+            self.sample = sample
 
-        min_x = torch.clamp(images - self.eps, min=0.0)
-        max_x = torch.clamp(images + self.eps, max=1.0)
+            assert is_sqr(
+                self.n_ens
+            ), "n_ens must be a perfect square (e.g., 9, 16, 25)."
+            self.grid_size = int(math.sqrt(self.n_ens))
+            self.thetas = get_thetas(self.grid_size, -self.aug_max, self.aug_max)
 
-        xt = images.clone().detach()
-        thetas_device = self.thetas.to(self.device)
+        def forward(self, images, labels):
+            images = images.clone().detach().to(self.device)
+            labels = labels.clone().detach().to(self.device)
+            B, C, H, W = images.shape
 
-        # Initialize ANDA gradient collector for input tensor dimensions
-        anda = ANDA_collector(data_shape=(B, C, H, W))
+            min_x = torch.clamp(images - self.eps, min=0.0)
+            max_x = torch.clamp(images + self.eps, max=1.0)
 
-        with torch.enable_grad():
-            for i in range(self.steps):
-                # Expand batch for transformation ensemble: [B, C, H, W] -> [B * M, C, H, W]
-                xt_batch = (
-                    xt.repeat_interleave(self.n_ens, dim=0)
-                    .detach()
-                    .requires_grad_(True)
-                )
+            xt = images.clone().detach()
+            thetas_device = self.thetas.to(self.device)
 
-                # Tile transformation matrices for batch processing
-                thetas_batch = thetas_device.repeat(B, 1) if hasattr(thetas_device, "repeat") else thetas_device
+            anda = ANDA_collector(data_shape=(B, C, H, W))
 
-                aug_xt_batch = translation(thetas_batch, xt_batch)
-                ys = labels.repeat_interleave(self.n_ens)
+            with torch.enable_grad():
+                for i in range(self.steps):
+                    grad_list = []
 
-                outputs = self.get_logits(aug_xt_batch)
-                if outputs.ndim == 1:
-                    outputs = outputs.unsqueeze(0)
+                    # Inner loop over ensemble transformations instead of batch expansion
+                    for n in range(self.n_ens):
+                        xt_single = xt.clone().detach().requires_grad_(True)
+                        
+                        # Extract current transformation matrix theta_n for the batch
+                        theta_n = thetas_device[n : n + 1].repeat(B, 1) if hasattr(thetas_device, "repeat") else thetas_device[n : n + 1]
 
-                loss = F.cross_entropy(outputs, ys, reduction="sum")
-                loss.backward()
+                        aug_xt = translation(theta_n, xt_single)
 
-                new_grad = xt_batch.grad
-                anda.collect_model(new_grad) # type: ignore
-                sample_noise = anda.noise_mean
+                        outputs = self.get_logits(aug_xt)
+                        if outputs.ndim == 1:
+                            outputs = outputs.unsqueeze(0)
 
-                if self.sample and i == self.steps - 1:
-                    sample_noises = anda.sample(n_sample=1, scale=1)
-                    sample_xt = (
-                        xt + self.alpha * sample_noises.squeeze(0).sign()
-                    )
-                    sample_xt = torch.clamp(sample_xt, min=0.0, max=1.0)
-                    xt = torch.max(torch.min(sample_xt, max_x), min_x).detach()
-                else:
-                    xt = xt + self.alpha * sample_noise.sign() # type: ignore
-                    xt = torch.clamp(xt, min=0.0, max=1.0)
-                    xt = torch.max(torch.min(xt, max_x), min_x).detach()
+                        loss = F.cross_entropy(outputs, labels, reduction="sum")
+                        loss.backward()
 
-        return xt
+                        grad_list.append(xt_single.grad)
+
+                    # Stack along dim=1 [B, n_ens, C, H, W] and reshape to [B * n_ens, C, H, W]
+                    # to preserve memory alignment matching repeat_interleave
+                    new_grad = torch.stack(grad_list, dim=1).view(B * self.n_ens, C, H, W)
+
+                    anda.collect_model(new_grad)  # type: ignore
+                    sample_noise = anda.noise_mean
+
+                    if self.sample and i == self.steps - 1:
+                        sample_noises = anda.sample(n_sample=1, scale=1)
+                        sample_xt = (
+                            xt + self.alpha * sample_noises.squeeze(0).sign()
+                        )
+                        sample_xt = torch.clamp(sample_xt, min=0.0, max=1.0)
+                        xt = torch.max(torch.min(sample_xt, max_x), min_x).detach()
+                    else:
+                        xt = xt + self.alpha * sample_noise.sign()  # type: ignore
+                        xt = torch.clamp(xt, min=0.0, max=1.0)
+                        xt = torch.max(torch.min(xt, max_x), min_x).detach()
+
+            return xt

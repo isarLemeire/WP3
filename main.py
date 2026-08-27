@@ -37,7 +37,7 @@ from src.adversarial.TAP import TAP
 from src.adversarial.GFLA_TI import GFLA_TI
 from src.adversarial.GFLA_BSR import GFLA_BSR
 from src.adversarial.GFLA_SI import GFLA_SI
-from src.adversarial.GFLA_TI import GFLA_TI
+from adversarial.GFLA_DI import GFLA_DI
 
 def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -112,7 +112,7 @@ def perform_experiment(
 
             adv_loader = AdversarialGenerator.generate_perturbed_dataset(
                 loader,
-                s_model,
+                s_model.model,
                 attack_class,
                 device=device,  # type: ignore
                 targeted=False,

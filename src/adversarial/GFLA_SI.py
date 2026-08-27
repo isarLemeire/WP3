@@ -5,6 +5,7 @@ from .GFLA import GFLA
 class GFLA_SI(GFLA):
     def __init__(self, model, m=5, num_neighbors=3, beta=4.5, **kwargs):
         super().__init__(model=model, **kwargs)
+        self.attack_name = "GFLA-SI"
         self.m = m 
         self.num_neighbors = num_neighbors
         self.beta = beta

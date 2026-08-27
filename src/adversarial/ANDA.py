@@ -67,6 +67,8 @@ class ANDA_collector:
         sampled = self.noise_mean.unsqueeze(0) + scale * self.noise_std.unsqueeze(0) * eps
         return sampled
 
+
+
 class ANDA(Attack):
     def __init__(
         self,
@@ -92,83 +94,58 @@ class ANDA(Attack):
         self.grid_size = int(math.sqrt(self.n_ens))
         self.thetas = get_thetas(self.grid_size, -self.aug_max, self.aug_max)
 
-    class ANDA(Attack):
-        def __init__(
-            self,
-            model,
-            eps=8 / 255,
-            alpha=2 / 255,
-            steps=10,
-            n_ens=4,
-            aug_max=0.3,
-            sample=False,
-        ):
-            super().__init__("ANDA", model)
-            self.eps = eps
-            self.alpha = alpha
-            self.steps = steps
-            self.n_ens = n_ens
-            self.aug_max = aug_max
-            self.sample = sample
+    def forward(self, images, labels):
+        images = images.clone().detach().to(self.device)
+        labels = labels.clone().detach().to(self.device)
+        B, C, H, W = images.shape
 
-            assert is_sqr(
-                self.n_ens
-            ), "n_ens must be a perfect square (e.g., 9, 16, 25)."
-            self.grid_size = int(math.sqrt(self.n_ens))
-            self.thetas = get_thetas(self.grid_size, -self.aug_max, self.aug_max)
+        min_x = torch.clamp(images - self.eps, min=0.0)
+        max_x = torch.clamp(images + self.eps, max=1.0)
 
-        def forward(self, images, labels):
-            images = images.clone().detach().to(self.device)
-            labels = labels.clone().detach().to(self.device)
-            B, C, H, W = images.shape
+        xt = images.clone().detach()
+        thetas_device = self.thetas.to(self.device)
 
-            min_x = torch.clamp(images - self.eps, min=0.0)
-            max_x = torch.clamp(images + self.eps, max=1.0)
+        anda = ANDA_collector(data_shape=(B, C, H, W))
 
-            xt = images.clone().detach()
-            thetas_device = self.thetas.to(self.device)
+        with torch.enable_grad():
+            for i in range(self.steps):
+                grad_list = []
 
-            anda = ANDA_collector(data_shape=(B, C, H, W))
+                # Inner loop over ensemble transformations instead of batch expansion
+                for n in range(self.n_ens):
+                    xt_single = xt.clone().detach().requires_grad_(True)
+                    
+                    # Extract current transformation matrix theta_n for the batch
+                    theta_n = thetas_device[n : n + 1].repeat(B, 1) if hasattr(thetas_device, "repeat") else thetas_device[n : n + 1]
 
-            with torch.enable_grad():
-                for i in range(self.steps):
-                    grad_list = []
+                    aug_xt = translation(theta_n, xt_single)
 
-                    # Inner loop over ensemble transformations instead of batch expansion
-                    for n in range(self.n_ens):
-                        xt_single = xt.clone().detach().requires_grad_(True)
-                        
-                        # Extract current transformation matrix theta_n for the batch
-                        theta_n = thetas_device[n : n + 1].repeat(B, 1) if hasattr(thetas_device, "repeat") else thetas_device[n : n + 1]
+                    outputs = self.get_logits(aug_xt)
+                    if outputs.ndim == 1:
+                        outputs = outputs.unsqueeze(0)
 
-                        aug_xt = translation(theta_n, xt_single)
+                    loss = F.cross_entropy(outputs, labels, reduction="sum")
+                    loss.backward()
 
-                        outputs = self.get_logits(aug_xt)
-                        if outputs.ndim == 1:
-                            outputs = outputs.unsqueeze(0)
+                    grad_list.append(xt_single.grad)
 
-                        loss = F.cross_entropy(outputs, labels, reduction="sum")
-                        loss.backward()
+                # Stack along dim=1 [B, n_ens, C, H, W] and reshape to [B * n_ens, C, H, W]
+                # to preserve memory alignment matching repeat_interleave
+                new_grad = torch.stack(grad_list, dim=1).view(B * self.n_ens, C, H, W)
 
-                        grad_list.append(xt_single.grad)
+                anda.collect_model(new_grad)  # type: ignore
+                sample_noise = anda.noise_mean
 
-                    # Stack along dim=1 [B, n_ens, C, H, W] and reshape to [B * n_ens, C, H, W]
-                    # to preserve memory alignment matching repeat_interleave
-                    new_grad = torch.stack(grad_list, dim=1).view(B * self.n_ens, C, H, W)
+                if self.sample and i == self.steps - 1:
+                    sample_noises = anda.sample(n_sample=1, scale=1)
+                    sample_xt = (
+                        xt + self.alpha * sample_noises.squeeze(0).sign()
+                    )
+                    sample_xt = torch.clamp(sample_xt, min=0.0, max=1.0)
+                    xt = torch.max(torch.min(sample_xt, max_x), min_x).detach()
+                else:
+                    xt = xt + self.alpha * sample_noise.sign()  # type: ignore
+                    xt = torch.clamp(xt, min=0.0, max=1.0)
+                    xt = torch.max(torch.min(xt, max_x), min_x).detach()
 
-                    anda.collect_model(new_grad)  # type: ignore
-                    sample_noise = anda.noise_mean
-
-                    if self.sample and i == self.steps - 1:
-                        sample_noises = anda.sample(n_sample=1, scale=1)
-                        sample_xt = (
-                            xt + self.alpha * sample_noises.squeeze(0).sign()
-                        )
-                        sample_xt = torch.clamp(sample_xt, min=0.0, max=1.0)
-                        xt = torch.max(torch.min(sample_xt, max_x), min_x).detach()
-                    else:
-                        xt = xt + self.alpha * sample_noise.sign()  # type: ignore
-                        xt = torch.clamp(xt, min=0.0, max=1.0)
-                        xt = torch.max(torch.min(xt, max_x), min_x).detach()
-
-            return xt
+        return xt

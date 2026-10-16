@@ -1,19 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchattacks.attack import Attack
+from ..base_attack import BaseAttack
 
-class PGN(Attack):
+class PGN(BaseAttack):
     def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, decay=0.9, beta=3.0, gamma=0.5, num_samples=5):
-        super().__init__("PGN", model)
-        self.eps = eps
-        self.alpha = alpha
-        self.steps = steps
+        super().__init__(model=model, eps=eps, alpha=alpha, steps=steps, attack_name="PGN")
         self.decay = decay
         self.num_samples = num_samples
         self.beta = beta
         self.gamma = gamma
-        self.supported_mode = ["default"]
 
     def forward(self, images, labels):
         images = images.clone().detach().to(self.device)

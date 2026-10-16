@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from .FeatureAttack import FeatureAttack
+from ..FeatureAttack import FeatureAttack
 
 import torch
 import torch.nn.functional as F

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.adversarial.FeatureAttack import FeatureAttack
+from adversarial.FeatureAttacks.FeatureAttack import FeatureAttack
 
 class DFAA(FeatureAttack):
     def __init__(self, *args, attack_name="DFAA", lam=0.3, **kwargs):

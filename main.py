@@ -20,27 +20,27 @@ from src.adversarial.adversarial_generator import AdversarialGenerator
 from src.data.nips_2017_dataset import NIPS2017Dataset
 from src.models.model_wrapper import ModelWrapper
 
-from src.adversarial.FDA import FDA
-from src.adversarial.ILA import ILA
-from src.adversarial.FIA import FIA
-from src.adversarial.NAA import NAA
-from src.adversarial.DFAA import DFAA
-from src.adversarial.GFLA import GFLA
-from src.adversarial.GFLA_D import GFLA_D
-from src.adversarial.ILPD import ILPD
-from src.adversarial.BSR import BSR
-from src.adversarial.ANDA import ANDA
-from src.adversarial.LPAA import LPAA
-from src.adversarial.MIG import MIG
-from src.adversarial.ResPA import ResPA
-from src.adversarial.TGR import TGR
-from src.adversarial.GRA import GRA
-from src.adversarial.PGN import PGN
-from src.adversarial.TAP import TAP
-from src.adversarial.GFLA_TI import GFLA_TI
-from src.adversarial.GFLA_BSR import GFLA_BSR
-from src.adversarial.GFLA_SI import GFLA_SI
-from src.adversarial.GFLA_DI import GFLA_DI
+from adversarial.FeatureAttacks.FDA import FDA
+from adversarial.FeatureAttacks.ILA import ILA
+from adversarial.FeatureAttacks.FIA import FIA
+from adversarial.FeatureAttacks.NAA import NAA
+from adversarial.FeatureAttacks.DFAA import DFAA
+from adversarial.FeatureAttacks.GFLA.GFLA import GFLA
+from adversarial.FeatureAttacks.GFLA.GFLA_D import GFLA_D
+from adversarial.FeatureAttacks.ILPD import ILPD
+from adversarial.LogitAttacks.BSR import BSR
+from adversarial.LogitAttacks.ANDA import ANDA
+from adversarial.LogitAttacks.LPAA import LPAA
+from adversarial.LogitAttacks.MIG import MIG
+from adversarial.LogitAttacks.ResPA import ResPA
+from adversarial.LogitAttacks.TGR import TGR
+from adversarial.LogitAttacks.GRA import GRA
+from adversarial.LogitAttacks.PGN import PGN
+from adversarial.FeatureAttacks.TAP import TAP
+from adversarial.FeatureAttacks.GFLA.GFLA_TI import GFLA_TI
+from adversarial.FeatureAttacks.GFLA.GFLA_BSR import GFLA_BSR
+from adversarial.FeatureAttacks.GFLA.GFLA_SI import GFLA_SI
+from adversarial.FeatureAttacks.GFLA.GFLA_DI import GFLA_DI
 from torchattacks import BIM, MIFGSM, NIFGSM, DIFGSM, TIFGSM, SINIFGSM, VMIFGSM
 
 # Constants

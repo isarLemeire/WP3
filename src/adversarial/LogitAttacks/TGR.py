@@ -5,30 +5,24 @@ import numpy as np
 
 from functools import partial
 
-from torchattacks.attack import Attack
+from ..base_attack import BaseAttack
 import numpy as np
 import torch
 import torch.nn as nn
 from functools import partial
 
-from torchattacks.attack import Attack
 
-
-class TGR(Attack):
-    def __init__(self, model, eps=8 / 255, steps=10, decay=1.0,
+class TGR(BaseAttack):
+    def __init__(self, model, eps=8 / 255, alpha = 2/255, steps=10, decay=1.0,
                  attn_gamma=0.25, qkv_gamma=0.75, mlp_gamma=0.5,
                  targeted=False):
-        super().__init__("TGR", model)
-        self.eps = eps
-        self.steps = steps
-        self.step_size = eps / steps
+        super().__init__(model=model, eps=eps, alpha=alpha, steps=steps, attack_name="MIG")
         self.decay = decay
         self.attn_gamma = attn_gamma
         self.qkv_gamma = qkv_gamma
         self.mlp_gamma = mlp_gamma
         self.targeted = targeted
         self.loss_flag = -1 if targeted else 1
-        self.supported_mode = ["default"]
 
         self._hook_handles = []
         self._register_hooks()
@@ -128,7 +122,7 @@ class TGR(Attack):
             grad = grad + momentum * self.decay
             momentum = grad
 
-            adv_images = adv_images.detach() + self.step_size * grad.sign()
+            adv_images = adv_images.detach() + self.alpha * grad.sign()
             delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
             adv_images = torch.clamp(images + delta, min=0.0, max=1.0).detach()
 

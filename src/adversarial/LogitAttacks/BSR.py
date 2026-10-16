@@ -3,10 +3,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
-from torchattacks.attack import Attack
+from ..base_attack import BaseAttack
 
 
-class BSR(Attack):
+class BSR(BaseAttack):
     def __init__(
         self,
         model,
@@ -18,15 +18,11 @@ class BSR(Attack):
         num_copies=5,
         max_angles=0.2,
     ):
-        super().__init__("BSR", model)
-        self.eps = eps
-        self.alpha = alpha
-        self.steps = steps
+        super().__init__(model=model, eps=eps, alpha=alpha, steps=steps, attack_name="BSR")
         self.decay = decay
         self.num_block = num_block
         self.num_copies = num_copies
         self.max_angles = max_angles  # Max rotation angle in Radians
-        self.supported_mode = ["default"]
 
     def _get_random_partition(self, length, num_block):
         """Partitions a dimension length into `num_block` random integer segments >= 1."""

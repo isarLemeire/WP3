@@ -18,7 +18,7 @@ from src.models.model_wrapper import ModelWrapper
 
 from src.adversarial.adversarial_generator import AdversarialGenerator
 
-from src.adversarial.GFLA import GFLA
+from adversarial.FeatureAttacks.GFLA.GFLA import GFLA
 
 def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):
     IMAGENET_MEAN = [0.485, 0.456, 0.406]

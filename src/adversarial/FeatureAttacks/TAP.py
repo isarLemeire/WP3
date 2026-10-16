@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.adversarial.FeatureAttack import FeatureAttack
+from adversarial.FeatureAttacks.FeatureAttack import FeatureAttack
 
 class TAP(FeatureAttack):
     def __init__(self, *args, attack_name="TAP", lam=0.005, power= 0.5, eta=1e3, **kwargs):

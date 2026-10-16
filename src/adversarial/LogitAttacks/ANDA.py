@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchattacks.attack import Attack
+from ..base_attack import BaseAttack
 
 
 def is_sqr(n: int) -> bool:
@@ -69,7 +69,7 @@ class ANDA_collector:
 
 
 
-class ANDA(Attack):
+class ANDA(BaseAttack):
     def __init__(
         self,
         model,
@@ -80,10 +80,7 @@ class ANDA(Attack):
         aug_max=0.3,
         sample=False,
     ):
-        super().__init__("ANDA", model)
-        self.eps = eps
-        self.alpha = alpha
-        self.steps = steps
+        super().__init__(model=model, eps=eps, alpha=alpha, steps=steps, attack_name="ANDA")
         self.n_ens = n_ens
         self.aug_max = aug_max
         self.sample = sample

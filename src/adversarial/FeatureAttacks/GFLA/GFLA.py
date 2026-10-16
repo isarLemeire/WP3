@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from .FeatureAttack import FeatureAttack
+from ..FeatureAttack import FeatureAttack
 
 class GFLA(FeatureAttack):
     def __init__(self, *args, lam=0.9, N=5, beta=4.5, **kwargs):

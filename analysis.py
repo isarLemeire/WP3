@@ -16,15 +16,15 @@ from src.models.model_wrapper import ModelWrapper
 
 from src.adversarial.adversarial_generator import AdversarialGenerator
 
-from adversarial.FeatureAttacks.FDA import FDA
-from adversarial.FeatureAttacks.ILA import ILA
-from adversarial.FeatureAttacks.FIA import FIA
-from adversarial.FeatureAttacks.NAA import NAA
-from adversarial.FeatureAttacks.DFAA import DFAA
-from adversarial.FeatureAttacks.GFLA.GFLA import GFLA
-from adversarial.FeatureAttacks.GFLA.GFLA_D import GFLA_D
-from adversarial.FeatureAttacks.ILPD import ILPD
-from adversarial.FeatureAttacks.TAP import TAP
+from src.adversarial.FeatureAttacks.FDA import FDA
+from src.adversarial.FeatureAttacks.ILA import ILA
+from src.adversarial.FeatureAttacks.FIA import FIA
+from src.adversarial.FeatureAttacks.NAA import NAA
+from src.adversarial.FeatureAttacks.DFAA import DFAA
+from src.adversarial.FeatureAttacks.GFLA.GFLA import GFLA
+from src.adversarial.FeatureAttacks.GFLA.GFLA_D import GFLA_D
+from src.adversarial.FeatureAttacks.ILPD import ILPD
+from src.adversarial.FeatureAttacks.TAP import TAP
 
 
 def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):

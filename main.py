@@ -1,20 +1,24 @@
+"""
+    Adversarial Attack Benchmarking Framework for PyTorch Models.
+"""
+
+import argparse
+import json
+import logging
+import time
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Dict, List, Type, Union
+
+import pandas as pd
 import torch
-import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from torchattacks import BIM, MIFGSM, NIFGSM, DIFGSM, TIFGSM, SINIFGSM, VMIFGSM
-
-import pandas as pd
-
-import json
-import argparse
-from types import SimpleNamespace
-
-from src.data.nips_2017_dataset import NIPS2017Dataset
-
-from src.models.model_wrapper import ModelWrapper
+# Custom Module Imports
 from src.adversarial.adversarial_generator import AdversarialGenerator
+from src.data.nips_2017_dataset import NIPS2017Dataset
+from src.models.model_wrapper import ModelWrapper
 
 from src.adversarial.FDA import FDA
 from src.adversarial.ILA import ILA
@@ -33,19 +37,35 @@ from src.adversarial.TGR import TGR
 from src.adversarial.GRA import GRA
 from src.adversarial.PGN import PGN
 from src.adversarial.TAP import TAP
-
 from src.adversarial.GFLA_TI import GFLA_TI
 from src.adversarial.GFLA_BSR import GFLA_BSR
 from src.adversarial.GFLA_SI import GFLA_SI
 from src.adversarial.GFLA_DI import GFLA_DI
+from torchattacks import BIM, MIFGSM, NIFGSM, DIFGSM, TIFGSM, SINIFGSM, VMIFGSM
 
-def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):
-    IMAGENET_MEAN = [0.485, 0.456, 0.406]
-    IMAGENET_STD  = [0.229, 0.224, 0.225]
+# Constants
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
+
+def dict_to_namespace(data: Dict[str, Any]) -> SimpleNamespace:
+    """Recursively converts a dictionary to a SimpleNamespace object."""
+    return SimpleNamespace(
+        **{
+            k: dict_to_namespace(v) if isinstance(v, dict) else v
+            for k, v in data.items()
+        }
+    )
+
+def get_dataloader(
+    batch_size: int,
+    subset_size: Union[int, None],
+    csv_filepath: str,
+    img_dir_filepath: str,
+) -> DataLoader:
+    """Instantiates the dataset and returns a PyTorch DataLoader."""
 
     transform = transforms.Compose([
-        transforms.Resize(224),
-        transforms.CenterCrop(224),
+        transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
@@ -56,18 +76,14 @@ def get_loader(batch_size, subset_size, csv_filepath, img_dir_filepath):
         transform=transform
     )
 
-    if subset_size is None or subset_size >= 1000:
-        return DataLoader(
-            nips_dataset, 
-            batch_size=batch_size, 
-            shuffle=False
-        )
-    else:
-        return DataLoader(
-            nips_dataset.get_subset(subset_size), 
-            batch_size=batch_size, 
-            shuffle=False
-        )
+    if subset_size is not None and subset_size < len(nips_dataset):
+            nips_dataset = nips_dataset.get_subset(subset_size)
+    
+    return DataLoader(
+        nips_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+    )
         
 def get_models(models, device):
     return [
@@ -79,25 +95,32 @@ def get_models(models, device):
             ViT=model.get("ViT", False),
             device=device) 
         for model in models]
-    
-import time
-import pandas as pd
-import torch
+
+def save_df(df: pd.DataFrame, output_path: Path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.suffix == ".csv":
+        df.to_csv(output_path, index=False)
+    elif output_path.suffix in [".xlsx", ".xls"]:
+        df.to_excel(output_path, index=False)
+    else:
+        df.to_csv(output_path.with_suffix(".csv"), index=False)
 
 
 def perform_experiment(
-    attacks,
-    surrogate_models,
-    target_models,
-    loader,
-    filename,
-    epsilon,
-    device="cuda",
-):
-    all_rows = []
+    attacks: List[Type],
+    surrogate_models: List[ModelWrapper],
+    target_models: List[ModelWrapper],
+    loader: DataLoader,
+    epsilon: float,
+    alpha: float,
+    device: torch.device,
+) -> pd.DataFrame:
+    """Executes the benchmarking matrix across surrogate models, attacks, and targets."""
+        
+    all_rows = [] # Holds all the experimental results 
 
     for s_model in surrogate_models:
-        s_name = s_model.__class__.__name__
+        s_name = getattr(s_model, "name", s_model.__class__.__name__)
 
         for attack_class in attacks:
             attack_name = (
@@ -106,31 +129,32 @@ def perform_experiment(
                 else attack_class.__class__.__name__
             )
 
-            if "cuda" in str(device) and torch.cuda.is_available():
-                torch.cuda.synchronize()
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
             start_time = time.perf_counter()
 
             adv_loader = AdversarialGenerator.generate_perturbed_dataset(
                 loader,
                 s_model.model,
                 attack_class,
-                device=device,  # type: ignore
+                device=device,
                 targeted=False,
                 eps=epsilon,
+                alpha = alpha
             )
 
-            if "cuda" in str(device) and torch.cuda.is_available():
-                torch.cuda.synchronize()
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
             wall_time = time.perf_counter() - start_time
 
-            eval_models = target_models + [s_model]
-            for t_model in eval_models:
-
-                results = t_model.evaluate_attack_metrics(
-                    s_model, loader, adv_loader
-                )
+            all_target_models = target_models + [s_model]
+            for t_model in all_target_models:
 
                 t_name = getattr(t_model, "name", t_model.__class__.__name__)
+
+                results = t_model.get_fooling_and_transfer_rate(
+                    s_model, loader, adv_loader
+                )
 
                 all_rows.append(
                     {
@@ -143,22 +167,22 @@ def perform_experiment(
                     }
                 )
 
+            del adv_loader
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+
     df = pd.DataFrame(all_rows)
-    if filename.endswith(".csv"):
-        df.to_csv(filename, index=False)
-    elif filename.endswith(".xlsx"):
-        df.to_excel(filename, index=False)
 
     return df
 
 def main(config):
     torch.backends.cudnn.deterministic = True
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Training on {device}")
+    print(f"Execution on {device}")
     
-    loader = get_loader(
+    loader = get_dataloader(
         batch_size=config.data.batch_size, 
-        subset_size=config.data.subset_size, 
+        subset_size=getattr(config.data, "subset_size", None), 
         csv_filepath=config.data.csv_filepath, 
         img_dir_filepath=config.data.img_dir_filepath
     )
@@ -168,31 +192,37 @@ def main(config):
     
     attacks = [globals()[name] for name in config.attacks]
     
-    perform_experiment(
+    df = perform_experiment(
         attacks=attacks,
         surrogate_models=surrogates,
         target_models=targets, 
         loader=loader,
-        filename=config.output,
         epsilon=config.eps/255,
-        device=device # type: ignore
+        alpha=config.alpha/255,
+        device=device
     )
+
+    save_df(df, Path(config.output))
     
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, required=True)
+    parser = argparse.ArgumentParser(
+        description="Adversarial Transferability Benchmarking Framework"
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=True,
+        help="Path to the JSON configuration file.",
+    )
     args = parser.parse_args()
 
-    with open(args.config, 'r') as f:
+    config_path = Path(args.config)
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Config file not found at: {config_path}")
+
+    with open(config_path, "r", encoding="utf-8") as f:
         config_dict = json.load(f)
 
-    # Convert nested dicts into SimpleNamespace objects
-    def to_namespace(d):
-        return SimpleNamespace(**{
-            k: to_namespace(v) if isinstance(v, dict) else v
-            for k, v in d.items()
-        })
-        
-    config = to_namespace(config_dict)
+    config = dict_to_namespace(config_dict)
         
     main(config)

@@ -12,8 +12,6 @@ from types import SimpleNamespace
 from src.data.nips_2017_dataset import NIPS2017Dataset
 
 from src.models.model_wrapper import ModelWrapper
-from src.ensembles.uniform_ensemble import UniformEnsemble
-from src.models.utils import rename_model
 
 from src.adversarial.adversarial_generator import AdversarialGenerator
 
